@@ -205,3 +205,19 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# PyInstaller build folders
+build/
+dist/
+*.spec
+
+# VSCode config
+.vscode/
+
+# Лишние/системные
+.DS_Store
+Thumbs.db
+
+*.exe
+*.log
+drafts/
