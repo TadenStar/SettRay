@@ -1,0 +1,272 @@
+
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import subprocess
+import threading
+import time
+import os
+import json
+import re
+from PIL import Image, ImageTk
+
+# Settings window (from earlier step)
+class SettingsWindow(tk.Toplevel):
+    def __init__(self, master, settings):
+        super().__init__(master)
+        self.title("Render Settings")
+        self.geometry("400x400")
+        self.resizable(False, False)
+        self.configure(bg="#f0f2fa")
+
+        self.settings = settings
+
+        # Simplify
+        self.use_simplify = tk.BooleanVar(value=settings.get("use_simplify", False))
+        simplify_check = tk.Checkbutton(self, text="Enable Simplify", variable=self.use_simplify, command=self.toggle_texture_limit, bg="#f0f2fa")
+        simplify_check.pack(anchor="w", padx=10, pady=(10, 0))
+
+        self.texture_limit_label = tk.Label(self, text="Texture Limit", bg="#f0f2fa")
+        self.texture_limit_combo = ttk.Combobox(self, values=[128, 256, 512, 1024, 2048, 4096, 8192])
+        self.texture_limit_combo.set(settings.get("texture_limit", 2048))
+
+        # Light Clamping
+        tk.Label(self, text="Indirect Light Clamping", bg="#f0f2fa").pack(anchor="w", padx=10, pady=(10, 0))
+        self.clamping = tk.DoubleVar(value=settings.get("clamp_indirect", 3.0))
+        tk.Entry(self, textvariable=self.clamping).pack(padx=10, fill="x")
+        tk.Label(self, text="10 - it's a regular value", bg="#f0f2fa", font=("Segoe UI", 8)).pack(anchor="w", padx=10)
+
+        # Persistent Data
+        self.use_persistent_data = tk.BooleanVar(value=settings.get("persistent_data", False))
+        tk.Checkbutton(self, text="Enable Persistent Data", variable=self.use_persistent_data, bg="#f0f2fa").pack(anchor="w", padx=10, pady=(10, 0))
+
+        # Use Tiling
+        self.use_tiling = tk.BooleanVar(value=settings.get("use_tiling", False))
+        tiling_check = tk.Checkbutton(self, text="Enable Tiling", variable=self.use_tiling, command=self.toggle_tile_inputs, bg="#f0f2fa")
+        tiling_check.pack(anchor="w", padx=10, pady=(10, 0))
+
+        # Tile Size
+        self.tile_size_label = tk.Label(self, text="Tile Size (x, y)", bg="#f0f2fa")
+        tile_frame = tk.Frame(self, bg="#f0f2fa")
+        self.tile_x = tk.IntVar(value=settings.get("tile_x", 64))
+        self.tile_y = tk.IntVar(value=settings.get("tile_y", 64))
+        tk.Entry(tile_frame, textvariable=self.tile_x, width=10).pack(side="left", padx=5)
+        tk.Entry(tile_frame, textvariable=self.tile_y, width=10).pack(side="left", padx=5)
+
+        # Noise Threshold
+        tk.Label(self, text="Noise Threshold", bg="#f0f2fa").pack(anchor="w", padx=10, pady=(10, 0))
+        self.noise_threshold = tk.DoubleVar(value=settings.get("noise_threshold", 0.05))
+        tk.Entry(self, textvariable=self.noise_threshold).pack(padx=10, fill="x")
+
+        # Save Button
+        tk.Button(self, text="Save Settings", command=self.save_and_close, bg="#5b64f2", fg="white").pack(pady=20)
+
+        self.tile_frame = tile_frame
+        self.toggle_texture_limit()
+        self.toggle_tile_inputs()
+
+    def toggle_texture_limit(self):
+        if self.use_simplify.get():
+            self.texture_limit_label.pack(anchor="w", padx=10, pady=(5, 0))
+            self.texture_limit_combo.pack(padx=10, fill="x")
+        else:
+            self.texture_limit_label.pack_forget()
+            self.texture_limit_combo.pack_forget()
+
+    def toggle_tile_inputs(self):
+        if self.use_tiling.get():
+            self.tile_size_label.pack(anchor="w", padx=10, pady=(5, 0))
+            self.tile_frame.pack(padx=10)
+        else:
+            self.tile_size_label.pack_forget()
+            self.tile_frame.pack_forget()
+
+    def save_and_close(self):
+        self.settings["use_simplify"] = self.use_simplify.get()
+        self.settings["texture_limit"] = int(self.texture_limit_combo.get()) if self.use_simplify.get() else None
+        self.settings["clamp_indirect"] = float(self.clamping.get())
+        self.settings["persistent_data"] = self.use_persistent_data.get()
+        self.settings["use_tiling"] = self.use_tiling.get()
+        self.settings["tile_x"] = self.tile_x.get() if self.use_tiling.get() else None
+        self.settings["tile_y"] = self.tile_y.get() if self.use_tiling.get() else None
+        self.settings["noise_threshold"] = float(self.noise_threshold.get())
+        self.destroy()
+
+
+# === Main GUI Code ===
+
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from tkinter import ttk
+from PIL import Image, ImageTk
+import subprocess
+import threading
+import time
+import os
+import re
+import json
+
+SETTINGS_FILE = "sett_config.json"
+
+class BlenderRenderGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Sett Render Launcher")
+        self.root.geometry("600x400")
+        self.root.resizable(False, False)
+        self.root.configure(bg="#f0f2fa")
+
+        self.blender_path = tk.StringVar()
+        self.project_path = tk.StringVar()
+        self.progress = tk.DoubleVar()
+        self.estimated_time = tk.StringVar(value="Waiting...")
+        self.start_time = None
+
+        self.load_settings()
+
+        self.content = tk.Frame(root, bg="#f0f2fa")
+        self.content.pack(padx=20, pady=20, fill="both", expand=True)
+
+        self.title = tk.Label(self.content, text="Sett Render Launcher", font=("Segoe UI", 18, "bold"), fg="#5b64f2", bg="#f0f2fa")
+        self.title.pack(pady=(0, 20))
+
+        tk.Label(self.content, text="Select Blender.exe:", bg="#f0f2fa", font=("Segoe UI", 10)).pack(anchor="w")
+        tk.Entry(self.content, textvariable=self.blender_path, width=50).pack()
+        tk.Button(self.content, text="Browse", command=self.select_blender).pack(pady=(0, 10))
+
+        tk.Label(self.content, text="Select .blend project:", bg="#f0f2fa", font=("Segoe UI", 10)).pack(anchor="w")
+        self.project_entry = tk.Entry(self.content, textvariable=self.project_path, width=50)
+        self.project_entry.pack()
+        tk.Button(self.content, text="Browse", command=self.select_project).pack(pady=(0, 20))
+
+        self.launch_button = tk.Button(self.content, text="Launch Render", bg="#5b64f2", fg="white", command=self.launch_render)
+        self.launch_button.pack()
+
+        self.status_label = tk.Label(self.content, textvariable=self.estimated_time, bg="#f0f2fa", font=("Segoe UI", 10))
+        self.status_label.pack(pady=(10, 0))
+
+        self.progress_bar = ttk.Progressbar(self.content, orient="horizontal", length=400, mode="determinate", variable=self.progress)
+        self.progress_bar.pack()
+
+        tk.Button(self.content, text="Open Output Folder", command=self.open_output_folder).pack(pady=(10, 0))
+
+        # Footer
+        footer = tk.Frame(root, bg="#1f2233", height=50)
+        footer.pack(side="bottom", fill="x")
+
+        try:
+            logo_img = Image.open("SettLogo.png")
+            logo_img = logo_img.resize((98, 34), Image.ANTIALIAS)
+            self.logo_photo = ImageTk.PhotoImage(logo_img)
+            logo_label = tk.Label(footer, image=self.logo_photo, bg="#1f2233")
+            logo_label.place(x=10, y=5)
+        except:
+            pass
+
+        tk.Label(footer, text="v0.2", fg="white", bg="#1f2233", font=("Segoe UI", 8)).place(x=10, y=38)
+        
+        tk.Label(footer, text="v0.2", fg="white", bg="#1f2233", font=("Segoe UI", 8)).place(x=10, y=38)
+        tk.Button(footer, text="Render Settings", command=lambda: SettingsWindow(self.root, self.settings), bg="#3c3f58", fg="white", font=("Segoe UI", 8)).place(x=100, y=36)
+
+        tk.Label(footer, text="Made by Pavel Postnikov for SETT", fg="white", bg="#1f2233", font=("Segoe UI", 8)).pack(side="right", padx=10)
+
+    def load_settings(self):
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE, "r") as f:
+                data = json.load(f)
+                self.blender_path.set(data.get("blender_path", ""))
+
+    def save_settings(self):
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump({"blender_path": self.blender_path.get()}, f)
+
+    def select_blender(self):
+        path = filedialog.askopenfilename(title="Select Blender.exe", filetypes=[("EXE files", "*.exe")])
+        if path:
+            self.blender_path.set(path)
+            self.save_settings()
+
+    def select_project(self):
+        path = filedialog.askopenfilename(title="Select .blend project", filetypes=[("Blender Projects", "*.blend")])
+        if path:
+            self.project_path.set(path)
+
+    def parse_frame_range(self):
+        blender = self.blender_path.get()
+        blend = self.project_path.get()
+        try:
+            cmd = [blender, "-b", blend, "--python-expr", "import bpy; print(f'START:{bpy.context.scene.frame_start},END:{bpy.context.scene.frame_end}')"]
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+            match = re.search(r'START:(\d+),END:(\d+)', result.stdout)
+            if match:
+                return int(match.group(1)), int(match.group(2))
+        except:
+            pass
+        return 1, 100
+
+
+    def launch_render(self):
+        if not self.blender_path.get() or not self.project_path.get():
+            messagebox.showerror("Error", "Please select Blender.exe and a .blend file")
+            return
+
+        self.progress.set(0)
+        self.estimated_time.set("Starting render")
+        self.start_time = time.time()
+        thread = threading.Thread(target=self.run_render)
+        thread.start()
+
+    def run_render(self):
+        blender = self.blender_path.get()
+        blend = self.project_path.get()
+        start_frame, end_frame = self.parse_frame_range()
+        total_frames = end_frame - start_frame + 1
+
+        command = [
+            blender, "--background", blend, "-a", "--", "--cycles-device", "OPTIX"
+        ]
+
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="ignore")
+
+        for line in process.stdout:
+            print(line.strip())
+            frame_match = re.search(r"Fra:(\d+)", line)
+            if frame_match:
+                current_frame = int(frame_match.group(1))
+                elapsed = time.time() - self.start_time
+                rendered_frames = current_frame - start_frame
+                fps = elapsed / rendered_frames if rendered_frames else 1
+                eta = int((total_frames - rendered_frames) * fps)
+                self.progress.set(rendered_frames / total_frames * 100)
+                self.estimated_time.set(f"Progress: {rendered_frames}/{total_frames} | ETA: {eta//60} min {eta%60} sec")
+
+        total_elapsed = int(time.time() - self.start_time)
+        self.show_completion_screen(total_elapsed)
+
+    def show_completion_screen(self, elapsed_seconds):
+        for widget in self.content.winfo_children():
+            widget.destroy()
+
+        tk.Label(self.content, text="Complete", font=("Segoe UI", 18, "bold"), fg="#4CAF50", bg="#f0f2fa").pack(pady=20)
+        mins, secs = divmod(elapsed_seconds, 60)
+        tk.Label(self.content, text=f"Render Time: {mins} min {secs} sec", font=("Segoe UI", 12), bg="#f0f2fa").pack(pady=(0, 10))
+
+        tk.Button(self.content, text="New Render", command=self.reset_ui, bg="#5b64f2", fg="white").pack()
+
+    def reset_ui(self):
+        for widget in self.content.winfo_children():
+            widget.destroy()
+        self.__init__(self.root)  # перезапускаем GUI
+
+    def open_output_folder(self):
+        blend_path = self.project_path.get()
+        if not blend_path:
+            messagebox.showinfo("Notice", "Please select a project first.")
+            return
+
+        folder = os.path.dirname(blend_path)
+        os.startfile(folder)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = BlenderRenderGUI(root)
+    root.mainloop()
