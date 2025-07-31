@@ -7,7 +7,15 @@ import time
 import os
 import json
 import re
+
 from PIL import Image, ImageTk
+
+# --- Styling constants ---
+THEME_BG = "#f0f2fa"
+THEME_ACCENT = "#5b64f2"
+THEME_DARK = "#1f2233"
+THEME_BUTTON = "#3c3f58"
+THEME_SUCCESS = "#4CAF50"
 
 # Settings window (from earlier step)
 class SettingsWindow(tk.Toplevel):
@@ -16,49 +24,72 @@ class SettingsWindow(tk.Toplevel):
         self.title("Render Settings")
         self.geometry("400x400")
         self.resizable(False, False)
-        self.configure(bg="#f0f2fa")
+        self.configure(bg=THEME_BG)
 
         self.settings = settings
 
         # Simplify
         self.use_simplify = tk.BooleanVar(value=settings.get("use_simplify", False))
-        simplify_check = tk.Checkbutton(self, text="Enable Simplify", variable=self.use_simplify, command=self.toggle_texture_limit, bg="#f0f2fa")
+        simplify_check = tk.Checkbutton(
+            self,
+            text="Enable Simplify",
+            variable=self.use_simplify,
+            command=self.toggle_texture_limit,
+            bg=THEME_BG,
+        )
         simplify_check.pack(anchor="w", padx=10, pady=(10, 0))
 
-        self.texture_limit_label = tk.Label(self, text="Texture Limit", bg="#f0f2fa")
+        self.texture_limit_label = tk.Label(self, text="Texture Limit", bg=THEME_BG)
         self.texture_limit_combo = ttk.Combobox(self, values=[128, 256, 512, 1024, 2048, 4096, 8192])
         self.texture_limit_combo.set(settings.get("texture_limit", 2048))
 
         # Light Clamping
-        tk.Label(self, text="Indirect Light Clamping", bg="#f0f2fa").pack(anchor="w", padx=10, pady=(10, 0))
+        tk.Label(self, text="Indirect Light Clamping", bg=THEME_BG).pack(anchor="w", padx=10, pady=(10, 0))
         self.clamping = tk.DoubleVar(value=settings.get("clamp_indirect", 3.0))
         tk.Entry(self, textvariable=self.clamping).pack(padx=10, fill="x")
-        tk.Label(self, text="10 - it's a regular value", bg="#f0f2fa", font=("Segoe UI", 8)).pack(anchor="w", padx=10)
+        tk.Label(self, text="10 - it's a regular value", bg=THEME_BG, font=("Segoe UI", 8)).pack(anchor="w", padx=10)
 
         # Persistent Data
         self.use_persistent_data = tk.BooleanVar(value=settings.get("persistent_data", False))
-        tk.Checkbutton(self, text="Enable Persistent Data", variable=self.use_persistent_data, bg="#f0f2fa").pack(anchor="w", padx=10, pady=(10, 0))
+        tk.Checkbutton(
+            self,
+            text="Enable Persistent Data",
+            variable=self.use_persistent_data,
+            bg=THEME_BG,
+        ).pack(anchor="w", padx=10, pady=(10, 0))
 
         # Use Tiling
         self.use_tiling = tk.BooleanVar(value=settings.get("use_tiling", False))
-        tiling_check = tk.Checkbutton(self, text="Enable Tiling", variable=self.use_tiling, command=self.toggle_tile_inputs, bg="#f0f2fa")
+        tiling_check = tk.Checkbutton(
+            self,
+            text="Enable Tiling",
+            variable=self.use_tiling,
+            command=self.toggle_tile_inputs,
+            bg=THEME_BG,
+        )
         tiling_check.pack(anchor="w", padx=10, pady=(10, 0))
 
         # Tile Size
-        self.tile_size_label = tk.Label(self, text="Tile Size (x, y)", bg="#f0f2fa")
-        tile_frame = tk.Frame(self, bg="#f0f2fa")
+        self.tile_size_label = tk.Label(self, text="Tile Size (x, y)", bg=THEME_BG)
+        tile_frame = tk.Frame(self, bg=THEME_BG)
         self.tile_x = tk.IntVar(value=settings.get("tile_x", 64))
         self.tile_y = tk.IntVar(value=settings.get("tile_y", 64))
         tk.Entry(tile_frame, textvariable=self.tile_x, width=10).pack(side="left", padx=5)
         tk.Entry(tile_frame, textvariable=self.tile_y, width=10).pack(side="left", padx=5)
 
         # Noise Threshold
-        tk.Label(self, text="Noise Threshold", bg="#f0f2fa").pack(anchor="w", padx=10, pady=(10, 0))
+        tk.Label(self, text="Noise Threshold", bg=THEME_BG).pack(anchor="w", padx=10, pady=(10, 0))
         self.noise_threshold = tk.DoubleVar(value=settings.get("noise_threshold", 0.05))
         tk.Entry(self, textvariable=self.noise_threshold).pack(padx=10, fill="x")
 
         # Save Button
-        tk.Button(self, text="Save Settings", command=self.save_and_close, bg="#5b64f2", fg="white").pack(pady=20)
+        tk.Button(
+            self,
+            text="Save Settings",
+            command=self.save_and_close,
+            bg=THEME_ACCENT,
+            fg="white",
+        ).pack(pady=20)
 
         self.tile_frame = tile_frame
         self.toggle_texture_limit()
@@ -113,7 +144,7 @@ class BlenderRenderGUI:
         self.root.title("Sett Render Launcher")
         self.root.geometry("600x400")
         self.root.resizable(False, False)
-        self.root.configure(bg="#f0f2fa")
+        self.root.configure(bg=THEME_BG)
 
         self.blender_path = tk.StringVar()
         self.project_path = tk.StringVar()
@@ -123,51 +154,105 @@ class BlenderRenderGUI:
 
         self.load_settings()
 
-        self.content = tk.Frame(root, bg="#f0f2fa")
+        self.content = tk.Frame(root, bg=THEME_BG)
         self.content.pack(padx=20, pady=20, fill="both", expand=True)
 
-        self.title = tk.Label(self.content, text="Sett Render Launcher", font=("Segoe UI", 18, "bold"), fg="#5b64f2", bg="#f0f2fa")
+        self.style = ttk.Style()
+        self.style.configure(
+            "Accent.Horizontal.TProgressbar",
+            troughcolor=THEME_BG,
+            background=THEME_ACCENT,
+        )
+
+        self.title = tk.Label(
+            self.content,
+            text="Sett Render Launcher",
+            font=("Segoe UI", 18, "bold"),
+            fg=THEME_ACCENT,
+            bg=THEME_BG,
+        )
         self.title.pack(pady=(0, 20))
 
-        tk.Label(self.content, text="Select Blender.exe:", bg="#f0f2fa", font=("Segoe UI", 10)).pack(anchor="w")
+        tk.Label(
+            self.content,
+            text="Select Blender.exe:",
+            bg=THEME_BG,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w")
         tk.Entry(self.content, textvariable=self.blender_path, width=50).pack()
         tk.Button(self.content, text="Browse", command=self.select_blender).pack(pady=(0, 10))
 
-        tk.Label(self.content, text="Select .blend project:", bg="#f0f2fa", font=("Segoe UI", 10)).pack(anchor="w")
+        tk.Label(
+            self.content,
+            text="Select .blend project:",
+            bg=THEME_BG,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w")
         self.project_entry = tk.Entry(self.content, textvariable=self.project_path, width=50)
         self.project_entry.pack()
         tk.Button(self.content, text="Browse", command=self.select_project).pack(pady=(0, 20))
 
-        self.launch_button = tk.Button(self.content, text="Launch Render", bg="#5b64f2", fg="white", command=self.launch_render)
+        self.launch_button = tk.Button(
+            self.content,
+            text="Launch Render",
+            bg=THEME_ACCENT,
+            fg="white",
+            command=self.launch_render,
+        )
         self.launch_button.pack()
 
-        self.status_label = tk.Label(self.content, textvariable=self.estimated_time, bg="#f0f2fa", font=("Segoe UI", 10))
+        self.status_label = tk.Label(
+            self.content,
+            textvariable=self.estimated_time,
+            bg=THEME_BG,
+            font=("Segoe UI", 10),
+        )
         self.status_label.pack(pady=(10, 0))
 
-        self.progress_bar = ttk.Progressbar(self.content, orient="horizontal", length=400, mode="determinate", variable=self.progress)
+        self.progress_bar = ttk.Progressbar(
+            self.content,
+            orient="horizontal",
+            length=400,
+            mode="determinate",
+            variable=self.progress,
+            style="Accent.Horizontal.TProgressbar",
+        )
         self.progress_bar.pack()
 
         tk.Button(self.content, text="Open Output Folder", command=self.open_output_folder).pack(pady=(10, 0))
 
         # Footer
-        footer = tk.Frame(root, bg="#1f2233", height=50)
+        footer = tk.Frame(root, bg=THEME_DARK, height=50)
         footer.pack(side="bottom", fill="x")
 
         try:
             logo_img = Image.open("SettLogo.png")
             logo_img = logo_img.resize((98, 34), Image.ANTIALIAS)
             self.logo_photo = ImageTk.PhotoImage(logo_img)
-            logo_label = tk.Label(footer, image=self.logo_photo, bg="#1f2233")
+            logo_label = tk.Label(footer, image=self.logo_photo, bg=THEME_DARK)
             logo_label.place(x=10, y=5)
         except:
             pass
 
-        tk.Label(footer, text="v0.2", fg="white", bg="#1f2233", font=("Segoe UI", 8)).place(x=10, y=38)
+        tk.Label(footer, text="v0.2", fg="white", bg=THEME_DARK, font=("Segoe UI", 8)).place(x=10, y=38)
         
-        tk.Label(footer, text="v0.2", fg="white", bg="#1f2233", font=("Segoe UI", 8)).place(x=10, y=38)
-        tk.Button(footer, text="Render Settings", command=lambda: SettingsWindow(self.root, self.settings), bg="#3c3f58", fg="white", font=("Segoe UI", 8)).place(x=100, y=36)
+        tk.Label(footer, text="v0.2", fg="white", bg=THEME_DARK, font=("Segoe UI", 8)).place(x=10, y=38)
+        tk.Button(
+            footer,
+            text="Render Settings",
+            command=lambda: SettingsWindow(self.root, self.settings),
+            bg=THEME_BUTTON,
+            fg="white",
+            font=("Segoe UI", 8),
+        ).place(x=100, y=36)
 
-        tk.Label(footer, text="Made by Pavel Postnikov for SETT", fg="white", bg="#1f2233", font=("Segoe UI", 8)).pack(side="right", padx=10)
+        tk.Label(
+            footer,
+            text="Made by Pavel Postnikov for SETT",
+            fg="white",
+            bg=THEME_DARK,
+            font=("Segoe UI", 8),
+        ).pack(side="right", padx=10)
 
     def load_settings(self):
         if os.path.exists(SETTINGS_FILE):
@@ -246,11 +331,28 @@ class BlenderRenderGUI:
         for widget in self.content.winfo_children():
             widget.destroy()
 
-        tk.Label(self.content, text="Complete", font=("Segoe UI", 18, "bold"), fg="#4CAF50", bg="#f0f2fa").pack(pady=20)
+        tk.Label(
+            self.content,
+            text="Complete",
+            font=("Segoe UI", 18, "bold"),
+            fg=THEME_SUCCESS,
+            bg=THEME_BG,
+        ).pack(pady=20)
         mins, secs = divmod(elapsed_seconds, 60)
-        tk.Label(self.content, text=f"Render Time: {mins} min {secs} sec", font=("Segoe UI", 12), bg="#f0f2fa").pack(pady=(0, 10))
+        tk.Label(
+            self.content,
+            text=f"Render Time: {mins} min {secs} sec",
+            font=("Segoe UI", 12),
+            bg=THEME_BG,
+        ).pack(pady=(0, 10))
 
-        tk.Button(self.content, text="New Render", command=self.reset_ui, bg="#5b64f2", fg="white").pack()
+        tk.Button(
+            self.content,
+            text="New Render",
+            command=self.reset_ui,
+            bg=THEME_ACCENT,
+            fg="white",
+        ).pack()
 
     def reset_ui(self):
         for widget in self.content.winfo_children():
