@@ -1,6 +1,7 @@
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import tkinter.font as tkfont
 import subprocess
 import threading
 import time
@@ -205,6 +206,9 @@ class BlenderRenderGUI:
         self.root.resizable(False, False)
         self.root.configure(bg=THEME_BG)
 
+        # Use Calibri for all text if available
+        self.root.option_add("*Font", "Calibri 10")
+
         self.blender_path = tk.StringVar()
         self.project_path = tk.StringVar()
         self.progress = tk.DoubleVar()
@@ -219,6 +223,23 @@ class BlenderRenderGUI:
         self.content = tk.Frame(root, bg=THEME_BG)
         self.content.pack(padx=20, pady=20, fill="both", expand=True)
 
+        self.footer = tk.Frame(root, bg=THEME_DARK, height=50)
+        self.footer.pack(side="bottom", fill="x")
+
+        self.show_main_screen()
+
+    def _clear_frames(self):
+        for widget in self.content.winfo_children():
+            widget.destroy()
+        for widget in self.footer.winfo_children():
+            widget.destroy()
+
+    def show_main_screen(self):
+        self._clear_frames()
+        self._build_main_screen()
+        self._build_footer()
+
+    def _build_main_screen(self):
         self.style = ttk.Style()
         self.style.configure(
             "Accent.Horizontal.TProgressbar",
@@ -226,14 +247,10 @@ class BlenderRenderGUI:
             background=THEME_ACCENT,
         )
 
-        self.title = tk.Label(
-            self.content,
-            text="SettRay",
-            font=("Segoe UI", 18, "bold"),
-            fg=THEME_ACCENT,
-            bg=THEME_BG,
-        )
-        self.title.pack(pady=(0, 20))
+        title_canvas = tk.Canvas(self.content, width=200, height=40, bg=THEME_BG, highlightthickness=0, bd=0)
+        title_canvas.pack(pady=(0, 20))
+        title_canvas.create_text(103, 23, text="SETTRAY", font=("Calibri", 18, "bold"), fill="#808080")
+        title_canvas.create_text(100, 20, text="SETTRAY", font=("Calibri", 18, "bold"), fill=THEME_ACCENT)
 
         blender_frame = tk.Frame(self.content, bg=THEME_BG)
         blender_frame.pack(anchor="center", pady=(0, 10))
@@ -241,7 +258,6 @@ class BlenderRenderGUI:
             blender_frame,
             text="> Blender file",
             bg=THEME_BG,
-            font=("Segoe UI", 10),
         ).pack(side="left")
         tk.Entry(blender_frame, textvariable=self.blender_path, width=40).pack(side="left", padx=5)
         tk.Button(blender_frame, text="Browse", command=self.select_blender).pack(side="left", padx=5)
@@ -252,7 +268,6 @@ class BlenderRenderGUI:
             project_frame,
             text="> Project File",
             bg=THEME_BG,
-            font=("Segoe UI", 10),
         ).pack(side="left")
         self.project_entry = tk.Entry(project_frame, textvariable=self.project_path, width=40)
         self.project_entry.pack(side="left", padx=5)
@@ -271,7 +286,6 @@ class BlenderRenderGUI:
             self.content,
             textvariable=self.estimated_time,
             bg=THEME_BG,
-            font=("Segoe UI", 10),
         )
         self.status_label.pack(pady=(10, 0))
 
@@ -280,42 +294,65 @@ class BlenderRenderGUI:
 
         tk.Button(self.content, text="Open Output Folder", command=self.open_output_folder).pack(pady=(10, 0))
 
-        # Footer
-        footer = tk.Frame(root, bg=THEME_DARK, height=50)
-        footer.pack(side="bottom", fill="x")
+        tk.Button(self.footer, text="Settings", command=self.show_settings_screen, bg=THEME_BUTTON, fg="white", font=("Calibri", 8)).place(x=10, y=36)
 
+    def _build_footer(self):
         try:
             logo_img = Image.open("SettLogo.png")
             logo_img = logo_img.resize((98, 34), Image.ANTIALIAS)
             self.logo_photo = ImageTk.PhotoImage(logo_img)
-            logo_label = tk.Label(footer, image=self.logo_photo, bg=THEME_DARK)
-            logo_label.place(x=10, y=5)
-        except:
+            tk.Label(self.footer, image=self.logo_photo, bg=THEME_DARK).place(x=10, y=5)
+        except Exception:
             pass
 
         tk.Label(
-            footer,
-            text="v0.2",
+            self.footer,
+            text="v0.3 Alpha",
             fg="white",
             bg=THEME_DARK,
-            font=("Segoe UI", 8),
+            font=("Calibri", 8),
         ).place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
+
         tk.Button(
-            footer,
+            self.footer,
             text="Render Settings",
             command=lambda: SettingsWindow(self.root, self.settings, self.save_settings),
             bg=THEME_BUTTON,
             fg="white",
-            font=("Segoe UI", 8),
+            font=("Calibri", 8),
         ).place(x=100, y=36)
 
         tk.Label(
-            footer,
+            self.footer,
             text="Made by Pavel Postnikov for SETT",
             fg="white",
             bg=THEME_DARK,
-            font=("Segoe UI", 8),
+            font=("Calibri", 8),
         ).pack(side="right", padx=10)
+
+    def show_settings_screen(self):
+        self._clear_frames()
+
+        tk.Label(self.content, text="SETTINGS", font=("Calibri", 16, "bold"), fg=THEME_ACCENT, bg=THEME_BG).pack(pady=(0, 10))
+
+        form = tk.Frame(self.content, bg=THEME_BG)
+        form.pack(pady=10)
+
+        tk.Label(form, text="Variable A", bg=THEME_BG).grid(row=0, column=0, sticky="w")
+        self.var_a = tk.StringVar()
+        tk.Entry(form, textvariable=self.var_a).grid(row=0, column=1, padx=5, pady=2)
+
+        self.var_b = tk.BooleanVar()
+        tk.Checkbutton(form, text="Variable B", variable=self.var_b, bg=THEME_BG).grid(row=1, column=0, columnspan=2, sticky="w")
+
+        tk.Label(form, text="Variable C", bg=THEME_BG).grid(row=2, column=0, sticky="w")
+        options = [str(v) for v in range(128, 8097, 128)]
+        self.var_c = tk.StringVar(value=options[0])
+        ttk.Combobox(form, values=options, textvariable=self.var_c, state="readonly").grid(row=2, column=1, padx=5, pady=2)
+
+        self._build_footer()
+        tk.Button(self.footer, text="Back", command=self.show_main_screen, bg=THEME_BUTTON, fg="white", font=("Calibri", 8)).place(x=10, y=36)
+
 
     def load_settings(self):
         if os.path.exists(SETTINGS_FILE):
