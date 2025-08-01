@@ -19,7 +19,7 @@ THEME_SUCCESS = "#4CAF50"
 
 # Settings window (from earlier step)
 class SettingsWindow(tk.Toplevel):
-    def __init__(self, master, settings):
+    def __init__(self, master, settings, save_callback=None):
         super().__init__(master)
         self.title("Render Settings")
         self.geometry("400x400")
@@ -27,6 +27,7 @@ class SettingsWindow(tk.Toplevel):
         self.configure(bg=THEME_BG)
 
         self.settings = settings
+        self._save_callback = save_callback
 
         # Simplify
         self.use_simplify = tk.BooleanVar(value=settings.get("use_simplify", False))
@@ -120,6 +121,8 @@ class SettingsWindow(tk.Toplevel):
         self.settings["tile_x"] = self.tile_x.get() if self.use_tiling.get() else None
         self.settings["tile_y"] = self.tile_y.get() if self.use_tiling.get() else None
         self.settings["noise_threshold"] = float(self.noise_threshold.get())
+        if callable(self._save_callback):
+            self._save_callback()
         self.destroy()
 
 
@@ -206,6 +209,9 @@ class BlenderRenderGUI:
         self.progress = tk.DoubleVar()
         self.estimated_time = tk.StringVar(value="Waiting...")
         self.start_time = None
+
+        # Container for user-defined render settings
+        self.settings = {}
 
         self.load_settings()
 
@@ -296,7 +302,7 @@ class BlenderRenderGUI:
         tk.Button(
             footer,
             text="Render Settings",
-            command=lambda: SettingsWindow(self.root, self.settings),
+            command=lambda: SettingsWindow(self.root, self.settings, self.save_settings),
             bg=THEME_BUTTON,
             fg="white",
             font=("Segoe UI", 8),
@@ -315,10 +321,15 @@ class BlenderRenderGUI:
             with open(SETTINGS_FILE, "r") as f:
                 data = json.load(f)
                 self.blender_path.set(data.get("blender_path", ""))
+                # Populate saved render settings if available
+                self.settings = data.get("settings", {})
 
     def save_settings(self):
         with open(SETTINGS_FILE, "w") as f:
-            json.dump({"blender_path": self.blender_path.get()}, f)
+            json.dump({
+                "blender_path": self.blender_path.get(),
+                "settings": self.settings,
+            }, f)
 
     def select_blender(self):
         path = filedialog.askopenfilename(title="Select Blender.exe", filetypes=[("EXE files", "*.exe")])
