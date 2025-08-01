@@ -138,10 +138,65 @@ import json
 
 SETTINGS_FILE = "sett_config.json"
 
+
+class SegmentedProgressBar(tk.Canvas):
+    """A custom progress bar with segmented gradient animation."""
+
+    def __init__(self, master, width=400, height=20, segments=20, **kwargs):
+        super().__init__(
+            master,
+            width=width,
+            height=height,
+            highlightthickness=0,
+            bd=0,
+            bg=THEME_BG,
+            **kwargs,
+        )
+        self.segments = segments
+        self.progress = 0
+        self.phase = 0
+        self.after(100, self._animate)
+
+    def set(self, value: float) -> None:
+        self.progress = max(0, min(100, value))
+        self._draw()
+
+    def _gradient_color(self, t: float) -> str:
+        base = tuple(int(THEME_ACCENT.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
+        light = [min(255, int(c + (255 - c) * 0.4)) for c in base]
+        r = int(base[0] * (1 - t) + light[0] * t)
+        g = int(base[1] * (1 - t) + light[1] * t)
+        b = int(base[2] * (1 - t) + light[2] * t)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _draw(self) -> None:
+        self.delete("all")
+        width = self.winfo_width()
+        height = self.winfo_height()
+        seg_width = width / self.segments
+        filled = self.segments * self.progress / 100
+
+        for i in range(self.segments):
+            x0 = i * seg_width + 1
+            x1 = x0 + seg_width - 2
+            if i < filled:
+                color = self._gradient_color(((self.phase + i * 5) % 100) / 100)
+                self.create_rectangle(x0, 1, x1, height - 1, fill=color, width=0)
+            else:
+                self.create_rectangle(x0, 1, x1, height - 1, fill=THEME_BG, width=0)
+
+        self.create_rectangle(0, 0, width, height, outline="#a3a3a3", width=1)
+
+    def _animate(self) -> None:
+        self.phase = (self.phase + 2) % 100
+        self._draw()
+        self.after(100, self._animate)
+
+
 class BlenderRenderGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sett Render Launcher")
+        self.root.title("SettRay")
         self.root.geometry("600x400")
         self.root.resizable(False, False)
         self.root.configure(bg=THEME_BG)
@@ -166,31 +221,35 @@ class BlenderRenderGUI:
 
         self.title = tk.Label(
             self.content,
-            text="Sett Render Launcher",
+            text="SettRay",
             font=("Segoe UI", 18, "bold"),
             fg=THEME_ACCENT,
             bg=THEME_BG,
         )
         self.title.pack(pady=(0, 20))
 
+        blender_frame = tk.Frame(self.content, bg=THEME_BG)
+        blender_frame.pack(anchor="center", pady=(0, 10))
         tk.Label(
-            self.content,
-            text="Select Blender.exe:",
+            blender_frame,
+            text="> Blender file",
             bg=THEME_BG,
             font=("Segoe UI", 10),
-        ).pack(anchor="w")
-        tk.Entry(self.content, textvariable=self.blender_path, width=50).pack()
-        tk.Button(self.content, text="Browse", command=self.select_blender).pack(pady=(0, 10))
+        ).pack(side="left")
+        tk.Entry(blender_frame, textvariable=self.blender_path, width=40).pack(side="left", padx=5)
+        tk.Button(blender_frame, text="Browse", command=self.select_blender).pack(side="left", padx=5)
 
+        project_frame = tk.Frame(self.content, bg=THEME_BG)
+        project_frame.pack(anchor="center", pady=(0, 20))
         tk.Label(
-            self.content,
-            text="Select .blend project:",
+            project_frame,
+            text="> Project File",
             bg=THEME_BG,
             font=("Segoe UI", 10),
-        ).pack(anchor="w")
-        self.project_entry = tk.Entry(self.content, textvariable=self.project_path, width=50)
-        self.project_entry.pack()
-        tk.Button(self.content, text="Browse", command=self.select_project).pack(pady=(0, 20))
+        ).pack(side="left")
+        self.project_entry = tk.Entry(project_frame, textvariable=self.project_path, width=40)
+        self.project_entry.pack(side="left", padx=5)
+        tk.Button(project_frame, text="Browse", command=self.select_project).pack(side="left", padx=5)
 
         self.launch_button = tk.Button(
             self.content,
@@ -209,14 +268,7 @@ class BlenderRenderGUI:
         )
         self.status_label.pack(pady=(10, 0))
 
-        self.progress_bar = ttk.Progressbar(
-            self.content,
-            orient="horizontal",
-            length=400,
-            mode="determinate",
-            variable=self.progress,
-            style="Accent.Horizontal.TProgressbar",
-        )
+        self.progress_bar = SegmentedProgressBar(self.content, width=400, height=20)
         self.progress_bar.pack()
 
         tk.Button(self.content, text="Open Output Folder", command=self.open_output_folder).pack(pady=(10, 0))
@@ -234,9 +286,13 @@ class BlenderRenderGUI:
         except:
             pass
 
-        tk.Label(footer, text="v0.2", fg="white", bg=THEME_DARK, font=("Segoe UI", 8)).place(x=10, y=38)
-        
-        tk.Label(footer, text="v0.2", fg="white", bg=THEME_DARK, font=("Segoe UI", 8)).place(x=10, y=38)
+        tk.Label(
+            footer,
+            text="v0.2",
+            fg="white",
+            bg=THEME_DARK,
+            font=("Segoe UI", 8),
+        ).place(relx=1.0, rely=1.0, x=-10, y=-10, anchor="se")
         tk.Button(
             footer,
             text="Render Settings",
@@ -295,8 +351,10 @@ class BlenderRenderGUI:
             return
 
         self.progress.set(0)
+        self.progress_bar.set(0)
         self.estimated_time.set("Starting render")
         self.start_time = time.time()
+        self.launch_button.config(state=tk.DISABLED)
         thread = threading.Thread(target=self.run_render)
         thread.start()
 
@@ -322,6 +380,7 @@ class BlenderRenderGUI:
                 fps = elapsed / rendered_frames if rendered_frames else 1
                 eta = int((total_frames - rendered_frames) * fps)
                 self.progress.set(rendered_frames / total_frames * 100)
+                self.progress_bar.set(self.progress.get())
                 self.estimated_time.set(f"Progress: {rendered_frames}/{total_frames} | ETA: {eta//60} min {eta%60} sec")
 
         total_elapsed = int(time.time() - self.start_time)
