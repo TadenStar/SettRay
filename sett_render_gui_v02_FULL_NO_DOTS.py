@@ -10,7 +10,11 @@ import json
 import re
 import sys
 
-from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageFilter
+try:
+    from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageFilter
+    PIL_AVAILABLE = True
+except Exception:  # pragma: no cover - pillow not installed
+    PIL_AVAILABLE = False
 
 # --- Styling constants ---
 THEME_BG = "#f0f2fa"
@@ -133,13 +137,15 @@ class SettingsWindow(tk.Toplevel):
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
-from PIL import Image, ImageTk
 import subprocess
 import threading
 import time
 import os
 import re
 import json
+
+if PIL_AVAILABLE:
+    from PIL import Image, ImageTk
 
 SETTINGS_FILE = "sett_config.json"
 
@@ -235,7 +241,15 @@ class BlenderRenderGUI:
             widget.destroy()
 
     def _create_title_image(self):
-        """Return a PhotoImage with blurred shadow for the title."""
+        """Return a PhotoImage with blurred shadow for the title.
+
+        If Pillow is unavailable, return ``None`` so the caller can fall
+        back to a simple text label. This prevents crashes when launching
+        the application without the optional dependency installed.
+        """
+        if not PIL_AVAILABLE:
+            return None
+
         font_path = os.path.join(os.path.dirname(__file__), "Calibri.ttf")
         if not os.path.exists(font_path):
             try:
@@ -249,19 +263,28 @@ class BlenderRenderGUI:
                 pass
 
         try:
-            font = ImageFont.truetype(font_path, 32)
+            font = ImageFont.truetype(font_path, 32 * 4)
         except Exception:
             font = ImageFont.load_default()
 
         text = "SETTRAY"
-        img = Image.new("RGBA", (200, 50), THEME_BG)
-        shadow = Image.new("RGBA", (200, 50), (0, 0, 0, 0))
+        # Determine text size to center it inside the image
+        dummy = Image.new("RGBA", (10, 10))
+        d = ImageDraw.Draw(dummy)
+        text_w, text_h = d.textsize(text, font=font)
+        width = max(600, text_w + 20)
+        height = text_h + 20
+
+        img = Image.new("RGBA", (width, height), THEME_BG)
+        shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw_shadow = ImageDraw.Draw(shadow)
-        draw_shadow.text((0, 0), text, font=font, fill=(128, 128, 128, int(255 * 0.4)))
+        x = (width - text_w) // 2
+        y = (height - text_h) // 2
+        draw_shadow.text((x, y), text, font=font, fill=(128, 128, 128, int(255 * 0.4)))
         shadow = shadow.filter(ImageFilter.GaussianBlur(3))
         img.paste(shadow, (3, 3), shadow)
         draw = ImageDraw.Draw(img)
-        draw.text((0, 0), text, font=font, fill=THEME_ACCENT)
+        draw.text((x, y), text, font=font, fill=THEME_ACCENT)
         return ImageTk.PhotoImage(img)
 
     def show_main_screen(self):
@@ -277,10 +300,30 @@ class BlenderRenderGUI:
             background=THEME_ACCENT,
         )
 
-        title_canvas = tk.Canvas(self.content, width=200, height=50, bg=THEME_BG, highlightthickness=0, bd=0)
-        title_canvas.pack(pady=(0, 20))
         self.title_photo = self._create_title_image()
-        title_canvas.create_image(100, 25, image=self.title_photo)
+        if self.title_photo is not None:
+            title_canvas = tk.Canvas(
+                self.content,
+                width=self.title_photo.width(),
+                height=self.title_photo.height(),
+                bg=THEME_BG,
+                highlightthickness=0,
+                bd=0,
+            )
+            title_canvas.pack(pady=(0, 20))
+            title_canvas.create_image(
+                self.title_photo.width() // 2,
+                self.title_photo.height() // 2,
+                image=self.title_photo,
+            )
+        else:
+            tk.Label(
+                self.content,
+                text="SettRay",
+                font=("Segoe UI", 32, "bold"),
+                fg=THEME_ACCENT,
+                bg=THEME_BG,
+            ).pack(pady=(0, 20))
 
         blender_frame = tk.Frame(self.content, bg=THEME_BG)
         blender_frame.pack(anchor="center", pady=(0, 10))
@@ -302,6 +345,14 @@ class BlenderRenderGUI:
         self.project_entry = tk.Entry(project_frame, textvariable=self.project_path, width=40)
         self.project_entry.pack(side="left", padx=5)
         tk.Button(project_frame, text="Browse", command=self.select_project).pack(side="left", padx=5)
+
+        tk.Button(
+            self.content,
+            text="Settings",
+            command=self.show_settings_screen,
+            bg=THEME_BUTTON,
+            fg="white",
+        ).pack(pady=(0, 10))
 
         self.launch_button = tk.Button(
             self.content,
@@ -325,13 +376,14 @@ class BlenderRenderGUI:
         tk.Button(self.content, text="Open Output Folder", command=self.open_output_folder).pack(pady=(10, 0))
 
     def _build_footer(self, show_settings_button=True):
-        try:
-            logo_img = Image.open("SettLogo.png")
-            logo_img = logo_img.resize((98, 34), Image.ANTIALIAS)
-            self.logo_photo = ImageTk.PhotoImage(logo_img)
-            tk.Label(self.footer, image=self.logo_photo, bg=THEME_DARK).place(x=10, y=5)
-        except Exception:
-            pass
+        if PIL_AVAILABLE:
+            try:
+                logo_img = Image.open("SettLogo.png")
+                logo_img = logo_img.resize((98, 34), Image.ANTIALIAS)
+                self.logo_photo = ImageTk.PhotoImage(logo_img)
+                tk.Label(self.footer, image=self.logo_photo, bg=THEME_DARK).place(x=10, y=5)
+            except Exception:
+                pass
 
         tk.Label(
             self.footer,
