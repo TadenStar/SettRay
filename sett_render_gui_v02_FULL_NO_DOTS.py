@@ -7,6 +7,7 @@ import time
 import os
 import json
 import re
+import sys
 
 from PIL import Image, ImageTk
 
@@ -17,7 +18,7 @@ THEME_DARK = "#1f2233"
 THEME_BUTTON = "#3c3f58"
 THEME_SUCCESS = "#4CAF50"
 
-# Settings window (from earlier step)
+# Render settings window
 class SettingsWindow(tk.Toplevel):
     def __init__(self, master, settings):
         super().__init__(master)
@@ -425,7 +426,12 @@ class BlenderRenderGUI:
             return
 
         folder = os.path.dirname(blend_path)
-        os.startfile(folder)
+        if os.name == "nt":
+            os.startfile(folder)
+        elif sys.platform == "darwin":
+            subprocess.call(["open", folder])
+        else:
+            subprocess.call(["xdg-open", folder])
 
 if __name__ == "__main__":
     root = tk.Tk()
