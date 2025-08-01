@@ -249,19 +249,28 @@ class BlenderRenderGUI:
                 pass
 
         try:
-            font = ImageFont.truetype(font_path, 32)
+            font = ImageFont.truetype(font_path, 32 * 4)
         except Exception:
             font = ImageFont.load_default()
 
         text = "SETTRAY"
-        img = Image.new("RGBA", (200, 50), THEME_BG)
-        shadow = Image.new("RGBA", (200, 50), (0, 0, 0, 0))
+        # Determine text size to center it inside the image
+        dummy = Image.new("RGBA", (10, 10))
+        d = ImageDraw.Draw(dummy)
+        text_w, text_h = d.textsize(text, font=font)
+        width = max(600, text_w + 20)
+        height = text_h + 20
+
+        img = Image.new("RGBA", (width, height), THEME_BG)
+        shadow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw_shadow = ImageDraw.Draw(shadow)
-        draw_shadow.text((0, 0), text, font=font, fill=(128, 128, 128, int(255 * 0.4)))
+        x = (width - text_w) // 2
+        y = (height - text_h) // 2
+        draw_shadow.text((x, y), text, font=font, fill=(128, 128, 128, int(255 * 0.4)))
         shadow = shadow.filter(ImageFilter.GaussianBlur(3))
         img.paste(shadow, (3, 3), shadow)
         draw = ImageDraw.Draw(img)
-        draw.text((0, 0), text, font=font, fill=THEME_ACCENT)
+        draw.text((x, y), text, font=font, fill=THEME_ACCENT)
         return ImageTk.PhotoImage(img)
 
     def show_main_screen(self):
@@ -277,10 +286,21 @@ class BlenderRenderGUI:
             background=THEME_ACCENT,
         )
 
-        title_canvas = tk.Canvas(self.content, width=200, height=50, bg=THEME_BG, highlightthickness=0, bd=0)
-        title_canvas.pack(pady=(0, 20))
         self.title_photo = self._create_title_image()
-        title_canvas.create_image(100, 25, image=self.title_photo)
+        title_canvas = tk.Canvas(
+            self.content,
+            width=self.title_photo.width(),
+            height=self.title_photo.height(),
+            bg=THEME_BG,
+            highlightthickness=0,
+            bd=0,
+        )
+        title_canvas.pack(pady=(0, 20))
+        title_canvas.create_image(
+            self.title_photo.width() // 2,
+            self.title_photo.height() // 2,
+            image=self.title_photo,
+        )
 
         blender_frame = tk.Frame(self.content, bg=THEME_BG)
         blender_frame.pack(anchor="center", pady=(0, 10))
@@ -302,6 +322,14 @@ class BlenderRenderGUI:
         self.project_entry = tk.Entry(project_frame, textvariable=self.project_path, width=40)
         self.project_entry.pack(side="left", padx=5)
         tk.Button(project_frame, text="Browse", command=self.select_project).pack(side="left", padx=5)
+
+        tk.Button(
+            self.content,
+            text="Settings",
+            command=self.show_settings_screen,
+            bg=THEME_BUTTON,
+            fg="white",
+        ).pack(pady=(0, 10))
 
         self.launch_button = tk.Button(
             self.content,
