@@ -1,0 +1,12 @@
+--- Render Session Started: 2025-11-28_16-34-10 ---
+Blender: C:/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe
+Project: D:/Working/SETT/MV/MV0033/Working/MV0033_Luna and Frank 2Part.blend
+Range: 1 to 250
+Persistent Data: True
+----------------------------------------
+Command: C:/Program Files (x86)/Steam/steamapps/common/Blender/blender.exe -b D:/Working/SETT/MV/MV0033/Working/MV0033_Luna and Frank 2Part.blend --python-expr import bpy; 
+try: bpy.context.scene.cycles.use_persistent_data = True
+except: pass -s 1 -e 250 -a
+
+!!! FORCED STOP BY USER !!!
+Render process finished with errors or was stopped.
